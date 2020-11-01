@@ -1,6 +1,6 @@
 ---
 title: "PF-0953 Programaci贸n geoespacial en R<br>Tarea 03: Leaflet"
-author: "Manuel Vargas"
+author: "Esmeralda Vargas Madrigal, Jesus Monge Mejia, Jose M Zeledon Calderon"
 date: "2020-10-28"
 output:
   html_document:
@@ -41,3 +41,36 @@ Desarrolle un mapa en Leaflet con las siguientes caracter铆sticas (el valor porc
 - (10%) Al hacer clic sobre el pol铆gono de un cant贸n, debe mostrarse el nombre del cant贸n y la cantidad de casos correspondiente a la capa (positivos, activos, recuperados o fallecidos).
 
 Utilice la capa de cantones del Instituto Geogr谩fico Nacional (IGN) publicada en el [Sistema Nacional de Informaci贸n terrritorial (SNIT)](https://www.snitcr.go.cr/) y los [datos de COVID-19 del Ministerio de Salud](http://geovision.uned.ac.cr/oges/) del 2020-10-27 disponibles en [https://github.com/pf0953-programaciongeoespacialr-2020/datos/tree/master/covid19/ms](https://github.com/pf0953-programaciongeoespacialr-2020/datos/tree/master/covid19/ms).
+
+```{r}
+# Leaflet
+library(leaflet)
+# sf
+library(sf)
+# tidyr
+library(tidyr)
+# dplyr
+library(dplyr)
+# spData
+library(spData)
+```
+
+```{r}
+# Definici髇 de mapa con capas base 
+mapa_cv19 <- leaflet() %>%
+  addTiles() %>%
+  addProviderTiles(providers$Stamen.Terrain, group = "Relieve") %>%
+  addProviderTiles(providers$Stamen.Watercolor, group = "Stamen Water color") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Im醙enes de ESRI") %>%
+  addLayersControl(
+  baseGroups = c("OpenStreetMap", "Relieve", "Stamen Water color", "Im醙enes de ESRI")
+  )
+```
+
+```{r}
+mapa_cv19
+```
+
+```{r}
+
+```
