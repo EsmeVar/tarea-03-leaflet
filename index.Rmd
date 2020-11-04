@@ -42,33 +42,279 @@ Desarrolle un mapa en Leaflet con las siguientes caracter铆sticas (el valor porc
 
 Utilice la capa de cantones del Instituto Geogr谩fico Nacional (IGN) publicada en el [Sistema Nacional de Informaci贸n terrritorial (SNIT)](https://www.snitcr.go.cr/) y los [datos de COVID-19 del Ministerio de Salud](http://geovision.uned.ac.cr/oges/) del 2020-10-27 disponibles en [https://github.com/pf0953-programaciongeoespacialr-2020/datos/tree/master/covid19/ms](https://github.com/pf0953-programaciongeoespacialr-2020/datos/tree/master/covid19/ms).
 
+## Librer铆as necesarias
 ```{r}
-# Leaflet
 library(leaflet)
-# sf
 library(sf)
-# tidyr
 library(tidyr)
-# dplyr
 library(dplyr)
-# spData
 library(spData)
 ```
-
+##Capas de datos
 ```{r}
-# Definici髇 de mapa con capas base 
-mapa_cv19 <- leaflet() %>%
-  addTiles() %>%
+# Lectura de la capa de cantones de un archivo GeoJSON
+sf_cantones <-
+  st_read(
+    "https://raw.githubusercontent.com/taller-r-jornadas-sigtd-2020/datos/master/cantones.geojson", 
+    quiet = T
+  )
+
+# Data frame de casos por cant贸n, con fechas en las columnas
+##Activos
+df_activos_cantones_ancho <- 
+  read.csv(
+    "https://raw.githubusercontent.com/pf0953-programaciongeoespacialr-2020/datos/master/covid19/ms/covid19-activos-cantones-20201020.csv"
+  )
+
+##Positivos
+df_positivos_cantones_ancho <- 
+  read.csv(
+    "https://raw.githubusercontent.com/pf0953-programaciongeoespacialr-2020/datos/master/covid19/ms/06_26_CSV_POSITIVOS.csv"
+  )
+
+##Recuperados
+df_recuperados_cantones_ancho <- 
+  read.csv(
+    "https://raw.githubusercontent.com/pf0953-programaciongeoespacialr-2020/datos/master/covid19/ms/06_26_CSV_RECUP.csv"
+  )
+
+##Fallecidos
+df_fallecidos_cantones_ancho <- 
+  read.csv(
+    "https://raw.githubusercontent.com/pf0953-programaciongeoespacialr-2020/datos/master/covid19/ms/06_27_CSV_FALLECIDOS.csv"
+  )
+```
+# Preparaci贸n de datos
+```{r}
+## Cambiar datos de filas a columnas
+# Data frame con fechas en las filas
+df_activos_cantones <-
+  df_activos_cantones_ancho %>%
+  pivot_longer(
+    cols = c(-cod_provin, -provincia, -cod_canton, -canton), 
+    names_to = "fecha", 
+    values_to = "activos"
+  )
+
+df_positivos_cantones <-
+  df_positivos_cantones_ancho %>%
+  pivot_longer(
+    cols = c(-cod_provin, -provincia, -cod_canton, -canton), 
+    names_to = "fecha", 
+    values_to = "positivos"
+  )
+
+df_recuperados_cantones <-
+  df_recuperados_cantones_ancho %>%
+  pivot_longer(
+    cols = c(-cod_provin, -provincia, -cod_canton, -canton), 
+    names_to = "fecha", 
+    values_to = "recuperados"
+  )
+
+df_fallecidos_cantones <-
+  df_fallecidos_cantones_ancho %>%
+  pivot_longer(
+    cols = c(-cod_provin, -provincia, -cod_canton, -canton), 
+    names_to = "fecha", 
+    values_to = "fallecidos"
+  )
+
+# Cambio de tipo de la columna "fecha"
+df_activos_cantones$fecha <- as.Date(df_activos_cantones$fecha, "X%d.%m.%Y")
+
+df_positivos_cantones$fecha <- as.Date(df_positivos_cantones$fecha, "X%d.%m.%Y")
+
+df_recuperados_cantones$fecha <- as.Date(df_recuperados_cantones$fecha, "X%d.%m.%Y")
+
+df_fallecidos_cantones$fecha <- as.Date(df_fallecidos_cantones$fecha, "X%d.%m.%Y")
+
+
+# Data frame de casos por cant贸n en la 煤ltima fecha
+df_activos_cantones_ultima_fecha <- 
+  df_activos_cantones %>%
+  filter(fecha == max(fecha, na.rm = TRUE)) %>%
+  select(cod_canton, activos)
+
+df_positivos_cantones_ultima_fecha <- 
+  df_positivos_cantones %>%
+  filter(fecha == max(fecha, na.rm = TRUE)) %>%
+  select(cod_canton, positivos)
+
+df_recuperados_cantones_ultima_fecha <- 
+  df_recuperados_cantones %>%
+  filter(fecha == max(fecha, na.rm = TRUE)) %>%
+  select(cod_canton, recuperados)
+
+df_fallecidos_cantones_ultima_fecha <- 
+  df_fallecidos_cantones %>%
+  filter(fecha == max(fecha, na.rm = TRUE)) %>%
+  select(cod_canton, fallecidos)
+
+
+# Objeto sf de casos en cantones en la 煤ltima fecha
+sf_activos_cantones_ultima_fecha <-
+  left_join(sf_cantones, df_activos_cantones_ultima_fecha, by = c('cod_canton')) %>%
+  arrange(desc(activos))
+
+sf_positivos_cantones_ultima_fecha <-
+  left_join(sf_cantones, df_positivos_cantones_ultima_fecha, by = c('cod_canton')) %>%
+  arrange(desc(positivos))
+
+sf_recuperados_cantones_ultima_fecha <-
+  left_join(sf_cantones, df_recuperados_cantones_ultima_fecha, by = c('cod_canton')) %>%
+  arrange(desc(recuperados))
+
+sf_fallecidos_cantones_ultima_fecha <-
+  left_join(sf_cantones, df_fallecidos_cantones_ultima_fecha, by = c('cod_canton')) %>%
+  arrange(desc(fallecidos))
+```
+# Mapas de coropletas
+```{r}
+## Mapa de coropletas en leaflet
+### Activos
+bins <- c(0, 500, 1000, 2000, 3000, 4000, Inf)
+paleta <- colorBin("YlOrRd", domain = sf_activos_cantones_ultima_fecha$activos, bins = bins)
+
+leaflet(sf_activos_cantones_ultima_fecha) %>% 
+  fitBounds(lng1 = -86, lng2 = -82, lat1 = 8, lat2 = 11) %>%
   addProviderTiles(providers$Stamen.Terrain, group = "Relieve") %>%
   addProviderTiles(providers$Stamen.Watercolor, group = "Stamen Water color") %>%
-  addProviderTiles(providers$Esri.WorldImagery, group = "Im醙enes de ESRI") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagenes de ESRI") %>%
+  addPolygons(fillColor = ~paleta(activos), stroke=T, fillOpacity = 1,
+              color="black", weight=0.2, opacity= 0.5,
+              group = "Cantones",
+              popup = paste(
+                "Provincia: ", sf_activos_cantones_ultima_fecha$provincia, "<br>",
+                "Cant贸n: ", sf_activos_cantones_ultima_fecha$canton, "<br>",
+                "activos: ", sf_activos_cantones_ultima_fecha$activos
+              )
+  ) %>%
+  addLegend("bottomright", pal = paleta, values = ~activos,
+            title = "Casos activos",
+            opacity = 1
+  ) %>%  
   addLayersControl(
-  baseGroups = c("OpenStreetMap", "Relieve", "Stamen Water color", "Im醙enes de ESRI")
+    baseGroups = c("OpenStreetMap", "Relieve", "Stamen Water color", "Imagenes de ESRI"),
+    overlayGroups = c("Cantones", "activos"),
+    options = layersControlOptions(collapsed = TRUE)    
+  ) %>%  
+  addMiniMap(
+    toggleDisplay = TRUE,
+    position = "bottomleft",
+    tiles = providers$OpenStreetMap.Mapnik
+  )
+
+### Positivos
+bins <- c(0, 10, 50, 100, 250, 500, Inf)
+paleta <- colorBin("Blues", domain = sf_positivos_cantones_ultima_fecha$positivos, bins = bins)
+
+leaflet(sf_positivos_cantones_ultima_fecha) %>% 
+  fitBounds(lng1 = -86, lng2 = -82, lat1 = 8, lat2 = 11) %>%
+  addProviderTiles(providers$Stamen.Terrain, group = "Relieve") %>%
+  addProviderTiles(providers$Stamen.Watercolor, group = "Stamen Water color") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagenes de ESRI") %>%
+  addPolygons(fillColor = ~paleta(positivos), stroke=T, fillOpacity = 1,
+              color="black", weight=0.2, opacity= 0.5,
+              group = "Cantones",
+              popup = paste(
+                "Provincia: ", sf_positivos_cantones_ultima_fecha$provincia, "<br>",
+                "Cant贸n: ", sf_positivos_cantones_ultima_fecha$canton, "<br>",
+                "positivos: ", sf_positivos_cantones_ultima_fecha$positivos
+              )
+  ) %>%
+  addLegend("bottomright", pal = paleta, values = ~positivos,
+            title = "Casos positivos",
+            opacity = 1
+  ) %>%  
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Relieve", "Stamen Water color", "Imagenes de ESRI"),
+    overlayGroups = c("Cantones", "positivos"),
+    options = layersControlOptions(collapsed = TRUE)    
+  ) %>%  
+  addMiniMap(
+    toggleDisplay = TRUE,
+    position = "bottomleft",
+    tiles = providers$OpenStreetMap.Mapnik
+  )
+
+### Recuperados
+bins <- c(0, 10, 50, 100, 250, Inf)
+paleta <- colorBin("Greens", domain = sf_recuperados_cantones_ultima_fecha$recuperados, bins = bins)
+
+leaflet(sf_recuperados_cantones_ultima_fecha) %>% 
+  fitBounds(lng1 = -86, lng2 = -82, lat1 = 8, lat2 = 11) %>%
+  addProviderTiles(providers$Stamen.Terrain, group = "Relieve") %>%
+  addProviderTiles(providers$Stamen.Watercolor, group = "Stamen Water color") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagenes de ESRI") %>%
+  addPolygons(fillColor = ~paleta(recuperados), stroke=T, fillOpacity = 1,
+              color="black", weight=0.2, opacity= 0.5,
+              group = "Cantones",
+              popup = paste(
+                "Provincia: ", sf_positivos_cantones_ultima_fecha$provincia, "<br>",
+                "Cant贸n: ", sf_positivos_cantones_ultima_fecha$canton, "<br>",
+                "recuperados: ", sf_recuperados_cantones_ultima_fecha$recuperados
+              )
+  ) %>%
+  addLegend("bottomright", pal = paleta, values = ~recuperados,
+            title = "Casos recuperados",
+            opacity = 1
+  ) %>%  
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Relieve", "Stamen Water color", "Imagenes de ESRI"),
+    overlayGroups = c("Cantones", "recuperados"),
+    options = layersControlOptions(collapsed = TRUE)    
+  ) %>%  
+  addMiniMap(
+    toggleDisplay = TRUE,
+    position = "bottomleft",
+    tiles = providers$OpenStreetMap.Mapnik
+  )
+
+### Fallecidos
+bins <- c(0, 1, 2, 5, 10, 20, Inf)
+paleta <- colorBin("Reds", domain = sf_fallecidos_cantones_ultima_fecha$fallecidos, bins = bins)
+
+leaflet(sf_fallecidos_cantones_ultima_fecha) %>% 
+  fitBounds(lng1 = -86, lng2 = -82, lat1 = 8, lat2 = 11) %>%
+  addProviderTiles(providers$Stamen.Terrain, group = "Relieve") %>%
+  addProviderTiles(providers$Stamen.Watercolor, group = "Stamen Water color") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagenes de ESRI") %>%
+  addPolygons(fillColor = ~paleta(fallecidos), stroke=T, fillOpacity = 1,
+              color="black", weight=0.2, opacity= 0.5,
+              group = "Cantones",
+              popup = paste(
+                "Provincia: ", sf_fallecidos_cantones_ultima_fecha$provincia, "<br>",
+                "Cant贸n: ", sf_fallecidos_cantones_ultima_fecha$canton, "<br>",
+                "fallecidos: ", sf_fallecidos_cantones_ultima_fecha$fallecidos
+              )
+  ) %>%
+  addLegend("bottomright", pal = paleta, values = ~fallecidos,
+            title = "Casos fallecidos",
+            opacity = 1
+  ) %>%  
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Relieve", "Stamen Water color", "Imagenes de ESRI"),
+    overlayGroups = c("Cantones", "fallecidos"),
+    options = layersControlOptions(collapsed = TRUE)    
+  ) %>%  
+  addMiniMap(
+    toggleDisplay = TRUE,
+    position = "bottomleft",
+    tiles = providers$OpenStreetMap.Mapnik
   )
 ```
 
 ```{r}
-mapa_cv19
+
+```
+
+```{r}
+
+```
+
+```{r}
+
 ```
 
 ```{r}
